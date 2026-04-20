@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #1a6b3c;      /* 농진청 녹색 계열 */
+  --primary-light: #e8f5ee;
+  --accent: #e85d2f;
+}
+
+body {
+  font-family: "Malgun Gothic", "맑은 고딕", sans-serif;
+  background: #f5f6fa;
+  color: #1a1a2e;
+}
