@@ -12,7 +12,9 @@ app = FastAPI(
     docs_url=f"{settings.API_V1_STR}/docs",
 )
 
-# Vercel 배포 도메인 + 로컬 개발 허용
+# experimentalServices: 프론트(/)와 백엔드(/_/backend)는 동일 도메인
+# → 브라우저 same-origin 요청이므로 CORS 불필요
+# 로컬 개발 및 외부 클라이언트를 위해 허용 목록 유지
 _vercel_url = os.getenv("VERCEL_URL", "")
 ALLOWED_ORIGINS = [
     "http://localhost:3000",

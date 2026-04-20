@@ -1,7 +1,13 @@
 import axios from "axios";
 
+// 개발: NEXT_PUBLIC_API_URL=http://localhost:8000
+// Vercel: /_/backend (experimentalServices 라우트 — 환경변수 불필요)
+const BASE = process.env.NEXT_PUBLIC_API_URL
+  ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1`
+  : "/_/backend/api/v1";
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL + "/api/v1",
+  baseURL: BASE,
   headers: { "Content-Type": "application/json" },
 });
 
