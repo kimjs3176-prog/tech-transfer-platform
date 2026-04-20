@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,9 +12,17 @@ app = FastAPI(
     docs_url=f"{settings.API_V1_STR}/docs",
 )
 
+# Vercel 배포 도메인 + 로컬 개발 허용
+_vercel_url = os.getenv("VERCEL_URL", "")
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    f"https://{_vercel_url}" if _vercel_url else "",
+    os.getenv("FRONTEND_URL", ""),
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[o for o in ALLOWED_ORIGINS if o],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

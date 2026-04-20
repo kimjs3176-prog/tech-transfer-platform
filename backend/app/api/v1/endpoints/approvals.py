@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -21,7 +21,7 @@ from app.services.approval_workflow import (
     get_all_steps,
     process_step,
 )
-from app.workers.tasks import send_approval_notification
+from app.services.notifications import send_approval_notification
 
 router = APIRouter()
 
@@ -64,6 +64,7 @@ async def get_workflow(contract_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/contracts/{contract_id}/workflow/start", response_model=WorkflowResponse)
 async def start_workflow(
     contract_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     actor: User = Depends(require_roles(UserRole.MANAGER, UserRole.ADMIN)),
 ):
@@ -75,14 +76,13 @@ async def start_workflow(
 
     steps = await start_approval_workflow(contract, db)
 
-    # 발명자에게 의견 작성 요청 알림
     if contract.invention_id:
         invention = await db.get(Invention, contract.invention_id)
         if invention:
             inventor = await db.get(User, invention.inventor_id)
             if inventor:
-                send_approval_notification.delay(
-                    contract_id, "inventor_opinion", inventor.email
+                background_tasks.add_task(
+                    send_approval_notification, contract_id, "inventor_opinion", inventor.email
                 )
 
     return WorkflowResponse(
@@ -99,10 +99,10 @@ async def start_workflow(
 async def submit_inventor_opinion(
     contract_id: int,
     payload: InventorOpinionRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     actor: User = Depends(require_roles(UserRole.INVENTOR, UserRole.ADMIN)),
 ):
-    # 발명자 의견을 Invention 테이블에 저장
     contract = await db.get(Contract, contract_id)
     if not contract:
         raise HTTPException(status_code=404, detail="계약서를 찾을 수 없습니다.")
@@ -114,7 +114,7 @@ async def submit_inventor_opinion(
             invention.inventor_opinion = payload.opinion
             invention.opinion_submitted_at = datetime.utcnow()
 
-    approval = await process_step(
+    await process_step(
         contract_id=contract_id,
         step=ApprovalStep.INVENTOR_OPINION,
         result=ApprovalResult.APPROVED,
@@ -123,8 +123,9 @@ async def submit_inventor_opinion(
         db=db,
     )
 
-    # 담당자에게 검토 요청 알림
-    send_approval_notification.delay(contract_id, "opinion_review", "manager@rda.go.kr")
+    background_tasks.add_task(
+        send_approval_notification, contract_id, "opinion_review", "manager@rda.go.kr"
+    )
 
     steps = await get_all_steps(contract_id, db)
     current = await get_current_step(contract_id, db)
@@ -142,6 +143,7 @@ async def submit_inventor_opinion(
 async def review_opinion(
     contract_id: int,
     payload: ApprovalActionRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     actor: User = Depends(require_roles(UserRole.MANAGER, UserRole.ADMIN)),
 ):
@@ -159,11 +161,13 @@ async def review_opinion(
     )
 
     if payload.result == ApprovalResult.APPROVED:
-        # 부서장에게 결재 요청 알림
-        send_approval_notification.delay(contract_id, "dept_head", "depthead@rda.go.kr")
+        background_tasks.add_task(
+            send_approval_notification, contract_id, "dept_head", "depthead@rda.go.kr"
+        )
     else:
-        # 반려 — 발명자에게 재작성 요청 알림
-        send_approval_notification.delay(contract_id, "inventor_opinion_retry", "inventor@rda.go.kr")
+        background_tasks.add_task(
+            send_approval_notification, contract_id, "inventor_opinion_retry", "inventor@rda.go.kr"
+        )
 
     steps = await get_all_steps(contract_id, db)
     current = await get_current_step(contract_id, db)
@@ -181,6 +185,7 @@ async def review_opinion(
 async def dept_approval(
     contract_id: int,
     payload: ApprovalActionRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     actor: User = Depends(require_roles(UserRole.DEPT_HEAD, UserRole.ADMIN)),
 ):
@@ -200,11 +205,13 @@ async def dept_approval(
     )
 
     if payload.result == ApprovalResult.APPROVED:
-        # 계약 등록 완료 — 신청자에게 알림
-        send_approval_notification.delay(contract_id, "registered", "applicant@example.com")
+        background_tasks.add_task(
+            send_approval_notification, contract_id, "registered", "applicant@example.com"
+        )
     else:
-        # 반려 — 담당자에게 재검토 알림
-        send_approval_notification.delay(contract_id, "review_retry", "manager@rda.go.kr")
+        background_tasks.add_task(
+            send_approval_notification, contract_id, "review_retry", "manager@rda.go.kr"
+        )
 
     steps = await get_all_steps(contract_id, db)
     current = await get_current_step(contract_id, db)
@@ -216,7 +223,7 @@ async def dept_approval(
     )
 
 
-# ── 워크플로 이력 조회 (계약별) ────────────────────────────────
+# ── 워크플로 이력 조회 ──────────────────────────────────────────
 
 @router.get("/contracts/{contract_id}/workflow/history", response_model=list[ApprovalStepResponse])
 async def get_workflow_history(contract_id: int, db: AsyncSession = Depends(get_db)):

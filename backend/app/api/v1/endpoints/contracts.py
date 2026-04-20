@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime
@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.models.contract import Contract, ContractStatus
 from app.schemas.contract import ContractCreate, ContractUpdate, ContractResponse
 from app.services.contract_generator import generate_contract_pdf
+from app.services.blob_storage import upload_pdf
 
 router = APIRouter()
 
@@ -70,11 +71,20 @@ async def download_contract(contract_id: int, db: AsyncSession = Depends(get_db)
         raise HTTPException(status_code=404, detail="계약서를 찾을 수 없습니다.")
 
     pdf_bytes = await generate_contract_pdf(contract)
+    filename = f"{contract.contract_no}.pdf"
+
+    # Vercel Blob에 업로드 후 URL 반환 (로컬은 스트리밍)
+    file_url = await upload_pdf(filename, pdf_bytes)
+
     contract.published_at = datetime.utcnow()
     contract.status = ContractStatus.PUBLISHED
+    contract.file_path = file_url
+
+    if file_url.startswith("http"):
+        return RedirectResponse(url=file_url)
 
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={contract.contract_no}.pdf"},
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
