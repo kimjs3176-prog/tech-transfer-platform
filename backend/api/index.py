@@ -7,4 +7,5 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from mangum import Mangum
 from app.main import app
 
-handler = Mangum(app, lifespan="off")
+# lifespan="auto": startup 이벤트(create_all) 실행 허용
+handler = Mangum(app, lifespan="auto")

@@ -2,27 +2,40 @@ import os
 from pydantic_settings import BaseSettings
 
 
+def _clean_db_url(url: str) -> str:
+    """asyncpg 비호환 파라미터 제거 및 스킴/SSL 정규화"""
+    from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+
+    # 스킴 변환
+    url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    parsed = urlparse(url)
+    params = parse_qs(parsed.query, keep_blank_values=True)
+
+    # asyncpg 비호환 파라미터 제거
+    for bad in ("pgbouncer", "sslmode", "connect_timeout"):
+        params.pop(bad, None)
+
+    # SSL 강제
+    params["ssl"] = ["require"]
+
+    new_query = urlencode({k: v[0] for k, v in params.items()})
+    clean = urlunparse(parsed._replace(query=new_query))
+    return clean
+
+
 def _db_url() -> str:
     """Supabase / Vercel Postgres / 로컬 DATABASE_URL 자동 감지"""
-    # Supabase 연동 시 POSTGRES_URL_NON_POOLING 우선 사용 (asyncpg 호환)
-    url = (
+    # NON_POOLING 우선 (pgbouncer 없는 직접 연결 — asyncpg 호환)
+    raw = (
         os.getenv("POSTGRES_URL_NON_POOLING")
         or os.getenv("POSTGRES_URL")
         or os.getenv("DATABASE_URL", "")
     )
-    if not url:
+    if not raw:
         return "postgresql+asyncpg://postgres:postgres@localhost:5432/tech_transfer"
-
-    # postgres:// / postgresql:// → postgresql+asyncpg://
-    url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-    url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-
-    # SSL 강제 (Supabase / Vercel Postgres 모두 필요)
-    if "sslmode" not in url and "ssl=" not in url:
-        sep = "&" if "?" in url else "?"
-        url = f"{url}{sep}ssl=require"
-
-    return url
+    return _clean_db_url(raw)
 
 
 class Settings(BaseSettings):
