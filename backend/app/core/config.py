@@ -3,17 +3,25 @@ from pydantic_settings import BaseSettings
 
 
 def _db_url() -> str:
-    """Vercel Postgres(POSTGRES_URL) 또는 로컬 DATABASE_URL 자동 감지"""
-    url = os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL", "")
+    """Supabase / Vercel Postgres / 로컬 DATABASE_URL 자동 감지"""
+    # Supabase 연동 시 POSTGRES_URL_NON_POOLING 우선 사용 (asyncpg 호환)
+    url = (
+        os.getenv("POSTGRES_URL_NON_POOLING")
+        or os.getenv("POSTGRES_URL")
+        or os.getenv("DATABASE_URL", "")
+    )
     if not url:
         return "postgresql+asyncpg://postgres:postgres@localhost:5432/tech_transfer"
-    # Vercel Postgres는 postgres:// 스킴 → asyncpg용으로 변환
+
+    # postgres:// / postgresql:// → postgresql+asyncpg://
     url = url.replace("postgres://", "postgresql+asyncpg://", 1)
     url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    # Vercel Postgres 풀링 파라미터 추가
-    if "sslmode" not in url:
+
+    # SSL 강제 (Supabase / Vercel Postgres 모두 필요)
+    if "sslmode" not in url and "ssl=" not in url:
         sep = "&" if "?" in url else "?"
         url = f"{url}{sep}ssl=require"
+
     return url
 
 
