@@ -13,12 +13,9 @@ def _clean_db_url(url: str) -> str:
     parsed = urlparse(url)
     params = parse_qs(parsed.query, keep_blank_values=True)
 
-    # asyncpg 비호환 파라미터 제거
-    for bad in ("pgbouncer", "sslmode", "connect_timeout"):
+    # asyncpg 비호환 파라미터 모두 제거 (SSL은 connect_args로 별도 처리)
+    for bad in ("pgbouncer", "sslmode", "ssl", "connect_timeout"):
         params.pop(bad, None)
-
-    # SSL 강제
-    params["ssl"] = ["require"]
 
     new_query = urlencode({k: v[0] for k, v in params.items()})
     clean = urlunparse(parsed._replace(query=new_query))
