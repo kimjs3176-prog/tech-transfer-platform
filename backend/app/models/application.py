@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime
-from sqlalchemy import String, Enum, DateTime, ForeignKey, Text, JSON
+from sqlalchemy import String, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -23,7 +23,7 @@ class Application(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     application_no: Mapped[str] = mapped_column(String(30), unique=True, index=True)  # 접수번호
     applicant_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    status: Mapped[ApplicationStatus] = mapped_column(Enum(ApplicationStatus), default=ApplicationStatus.WAITING)
+    status: Mapped[ApplicationStatus] = mapped_column(String(30), default=ApplicationStatus.WAITING)
 
     # 기술이전 신청 내용
     technology_name: Mapped[str] = mapped_column(String(500))
