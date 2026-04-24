@@ -7,16 +7,16 @@ from app.core.database import Base
 
 
 class ApprovalStep(str, enum.Enum):
-    INVENTOR_OPINION = "inventor_opinion"   # 발명자 의견 작성
-    OPINION_REVIEW = "opinion_review"       # 의견 검토
-    DEPT_HEAD = "dept_head"                 # 부서장 결재
-    FINAL = "final"                         # 최종 승인
+    INVENTOR_OPINION = "INVENTOR_OPINION"
+    OPINION_REVIEW = "OPINION_REVIEW"
+    DEPT_HEAD = "DEPT_HEAD"
+    FINAL = "FINAL"
 
 
 class ApprovalResult(str, enum.Enum):
-    PENDING = "pending"
-    APPROVED = "approved"
-    REJECTED = "rejected"
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
 
 
 class Approval(Base):

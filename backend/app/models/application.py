@@ -7,14 +7,14 @@ from app.core.database import Base
 
 
 class ApplicationStatus(str, enum.Enum):
-    WAITING = "waiting"          # 점수 대기
-    RECEIVED = "received"        # 신청서 접수
-    REVIEWING = "reviewing"      # 검토 중
-    PATENT_CHECK = "patent_check"  # 특허청 승인 확인
-    APPROVED = "approved"        # 승인
-    REJECTED = "rejected"        # 반려
-    CONTRACT_DRAFT = "contract_draft"  # 계약서 작성 중
-    COMPLETED = "completed"      # 완료
+    WAITING = "WAITING"
+    RECEIVED = "RECEIVED"
+    REVIEWING = "REVIEWING"
+    PATENT_CHECK = "PATENT_CHECK"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CONTRACT_DRAFT = "CONTRACT_DRAFT"
+    COMPLETED = "COMPLETED"
 
 
 class Application(Base):

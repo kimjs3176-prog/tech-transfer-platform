@@ -7,12 +7,12 @@ from app.core.database import Base
 
 
 class UserRole(str, enum.Enum):
-    APPLICANT = "applicant"        # 신청자 (NATI)
-    MANAGER = "manager"            # 한국농업기술진흥원 담당자
-    INSTITUTION = "institution"    # 소속기관 담당자
-    DEPT_HEAD = "dept_head"        # 부서장
-    INVENTOR = "inventor"          # 발명자
-    ADMIN = "admin"                # 시스템 관리자
+    APPLICANT = "APPLICANT"
+    MANAGER = "MANAGER"
+    INSTITUTION = "INSTITUTION"
+    DEPT_HEAD = "DEPT_HEAD"
+    INVENTOR = "INVENTOR"
+    ADMIN = "ADMIN"
 
 
 class User(Base):
@@ -27,5 +27,8 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    applications: Mapped[list["Application"]] = relationship(back_populates="applicant")
+    applications: Mapped[list["Application"]] = relationship(
+        back_populates="applicant",
+        foreign_keys="Application.applicant_id",
+    )
     inventions: Mapped[list["Invention"]] = relationship(back_populates="inventor")

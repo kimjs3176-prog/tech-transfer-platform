@@ -8,11 +8,11 @@ from app.core.database import Base
 
 
 class ContractStatus(str, enum.Enum):
-    DRAFT = "draft"                  # 계약서 작성
-    INVENTOR_REVIEW = "inventor_review"  # 발명자 의견 검토
-    DEPT_APPROVAL = "dept_approval"  # 부서장 결재
-    REGISTERED = "registered"        # 계약서 등록
-    PUBLISHED = "published"          # 계약서 출력 완료
+    DRAFT = "DRAFT"
+    INVENTOR_REVIEW = "INVENTOR_REVIEW"
+    DEPT_APPROVAL = "DEPT_APPROVAL"
+    REGISTERED = "REGISTERED"
+    PUBLISHED = "PUBLISHED"
 
 
 class Contract(Base):
