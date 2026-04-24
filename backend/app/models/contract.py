@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime, date
-from sqlalchemy import String, DateTime, ForeignKey, Text, Date, Numeric
+from sqlalchemy import String, DateTime, ForeignKey, Text, Date, Numeric, Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from decimal import Decimal
 
@@ -22,7 +22,10 @@ class Contract(Base):
     contract_no: Mapped[str] = mapped_column(String(30), unique=True, index=True)
     application_id: Mapped[int] = mapped_column(ForeignKey("applications.id"), unique=True)
     invention_id: Mapped[int | None] = mapped_column(ForeignKey("inventions.id"))
-    status: Mapped[ContractStatus] = mapped_column(String(30), default=ContractStatus.DRAFT)
+    status: Mapped[ContractStatus] = mapped_column(
+        SAEnum(ContractStatus, name="contractstatus", create_type=False),
+        default=ContractStatus.DRAFT,
+    )
 
     # 계약 조건
     contract_period_start: Mapped[date | None] = mapped_column(Date)

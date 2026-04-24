@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime
-from sqlalchemy import String, DateTime, ForeignKey, Text, Integer
+from sqlalchemy import String, DateTime, ForeignKey, Text, Integer, Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -24,10 +24,15 @@ class Approval(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     contract_id: Mapped[int] = mapped_column(ForeignKey("contracts.id"))
-    step: Mapped[ApprovalStep] = mapped_column(String(30))
+    step: Mapped[ApprovalStep] = mapped_column(
+        SAEnum(ApprovalStep, name="approvalstep", create_type=False),
+    )
     step_order: Mapped[int] = mapped_column(Integer)
     approver_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
-    result: Mapped[ApprovalResult] = mapped_column(String(20), default=ApprovalResult.PENDING)
+    result: Mapped[ApprovalResult] = mapped_column(
+        SAEnum(ApprovalResult, name="approvalresult", create_type=False),
+        default=ApprovalResult.PENDING,
+    )
     comment: Mapped[str | None] = mapped_column(Text)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
