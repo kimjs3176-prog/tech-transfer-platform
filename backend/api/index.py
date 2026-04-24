@@ -7,5 +7,5 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from mangum import Mangum
 from app.main import app
 
-# lifespan="auto": startup 이벤트(create_all) 실행 허용
-handler = Mangum(app, lifespan="auto")
+# lifespan="off": 서버리스 환경에서 startup 이벤트 비활성화
+handler = Mangum(app, lifespan="off")

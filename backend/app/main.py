@@ -1,29 +1,12 @@
 import os
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.core.database import engine, Base
 from app.api.v1.router import api_router
-import app.models  # noqa: F401 — 모든 모델 임포트 (create_all 인식용)
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # 서버 시작 시 테이블 자동 생성
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        print("[startup] DB 테이블 생성 완료")
-    except Exception as e:
-        # 연결 실패 시에도 앱은 기동 — 개별 요청에서 에러 반환
-        print("[startup] DB 연결 실패 (요청 시 재시도):", e)
-    yield
 
 
 app = FastAPI(
-    lifespan=lifespan,
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
