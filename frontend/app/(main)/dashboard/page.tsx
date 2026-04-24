@@ -29,7 +29,6 @@ export default function DashboardPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold text-[var(--primary)]">대시보드</h1>
 
-      {/* 요약 카드 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "전체 신청", value: data?.applications.total ?? "-", color: "bg-blue-50 border-blue-200" },
@@ -44,7 +43,6 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* 차트 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg p-4 shadow-sm">
           <h2 className="font-semibold mb-4">신청 현황</h2>

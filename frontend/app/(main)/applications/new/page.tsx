@@ -33,18 +33,29 @@ export default function NewApplicationPage() {
       <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-5 bg-white p-6 rounded-lg shadow-sm">
         <div>
           <label className="block text-sm font-medium mb-1">기술명 *</label>
-          <input {...register("technology_name")} className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
+          <input
+            {...register("technology_name")}
+            className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+            placeholder="예: 스마트팜 수분감지 센서 기술"
+          />
           {errors.technology_name && <p className="text-red-500 text-xs mt-1">{errors.technology_name.message}</p>}
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">특허번호</label>
-          <input {...register("patent_no")} placeholder="예: 10-2023-0012345" className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
+          <input
+            {...register("patent_no")}
+            placeholder="예: 10-2023-0012345"
+            className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+          />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">이전 유형 *</label>
-          <select {...register("transfer_type")} className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">
+          <select
+            {...register("transfer_type")}
+            className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+          >
             <option value="">선택</option>
             <option value="전용실시">전용실시</option>
             <option value="통상실시">통상실시</option>
@@ -55,15 +66,28 @@ export default function NewApplicationPage() {
 
         <div>
           <label className="block text-sm font-medium mb-1">이전 목적 *</label>
-          <textarea {...register("purpose")} rows={4} className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
+          <textarea
+            {...register("purpose")}
+            rows={4}
+            placeholder="기술이전을 희망하는 목적과 활용 계획을 상세히 기술해 주세요."
+            className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+          />
           {errors.purpose && <p className="text-red-500 text-xs mt-1">{errors.purpose.message}</p>}
         </div>
 
         <div className="flex gap-3 pt-2">
-          <button type="submit" disabled={mutation.isPending} className="bg-[var(--primary)] text-white px-6 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
+          <button
+            type="submit"
+            disabled={mutation.isPending}
+            className="bg-[var(--primary)] text-white px-6 py-2 rounded-lg hover:opacity-90 disabled:opacity-50"
+          >
             {mutation.isPending ? "제출 중..." : "신청서 제출"}
           </button>
-          <button type="button" onClick={() => router.back()} className="border px-6 py-2 rounded-lg text-gray-600 hover:bg-gray-50">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="border px-6 py-2 rounded-lg text-gray-600 hover:bg-gray-50"
+          >
             취소
           </button>
         </div>

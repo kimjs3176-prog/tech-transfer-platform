@@ -5,23 +5,23 @@ import { applicationApi } from "@/lib/api";
 import Link from "next/link";
 
 const STATUS_LABELS: Record<string, string> = {
-  waiting: "점수 대기",
-  received: "접수",
-  reviewing: "검토 중",
-  patent_check: "특허청 확인",
-  approved: "승인",
-  rejected: "반려",
-  contract_draft: "계약서 작성",
-  completed: "완료",
+  WAITING: "점수 대기",
+  RECEIVED: "접수",
+  REVIEWING: "검토 중",
+  PATENT_CHECK: "특허청 확인",
+  APPROVED: "승인",
+  REJECTED: "반려",
+  CONTRACT_DRAFT: "계약서 작성",
+  COMPLETED: "완료",
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  waiting: "bg-gray-100 text-gray-700",
-  received: "bg-blue-100 text-blue-700",
-  reviewing: "bg-yellow-100 text-yellow-700",
-  approved: "bg-green-100 text-green-700",
-  rejected: "bg-red-100 text-red-700",
-  completed: "bg-emerald-100 text-emerald-700",
+  WAITING: "bg-gray-100 text-gray-700",
+  RECEIVED: "bg-blue-100 text-blue-700",
+  REVIEWING: "bg-yellow-100 text-yellow-700",
+  APPROVED: "bg-green-100 text-green-700",
+  REJECTED: "bg-red-100 text-red-700",
+  COMPLETED: "bg-emerald-100 text-emerald-700",
 };
 
 export default function ApplicationsPage() {
@@ -45,9 +45,8 @@ export default function ApplicationsPage() {
         </Link>
       </div>
 
-      {/* 상태 필터 */}
       <div className="flex gap-2 flex-wrap">
-        {["", "waiting", "received", "approved", "rejected"].map((s) => (
+        {["", "WAITING", "RECEIVED", "APPROVED", "REJECTED"].map((s) => (
           <button
             key={s}
             onClick={() => setStatusFilter(s)}
@@ -62,7 +61,6 @@ export default function ApplicationsPage() {
         ))}
       </div>
 
-      {/* 목록 테이블 */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b">
@@ -79,6 +77,13 @@ export default function ApplicationsPage() {
               <tr>
                 <td colSpan={6} className="text-center py-8 text-gray-400">
                   불러오는 중...
+                </td>
+              </tr>
+            )}
+            {!isLoading && (!data || data.length === 0) && (
+              <tr>
+                <td colSpan={6} className="text-center py-8 text-gray-400">
+                  신청 내역이 없습니다.
                 </td>
               </tr>
             )}
