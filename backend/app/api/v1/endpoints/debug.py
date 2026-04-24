@@ -79,6 +79,34 @@ async def debug_query_test():
     return results
 
 
+@router.get("/register-test")
+async def debug_register_test():
+    """사용자 등록 500 오류 원인 파악"""
+    import traceback
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import sessionmaker
+    from app.models.user import User, UserRole
+    from app.core.security import get_password_hash
+
+    AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with AsyncSessionLocal() as session:
+            user = User(
+                email="test-debug@test.kr",
+                name="디버그테스트",
+                hashed_password=get_password_hash("Test1234!"),
+                role=UserRole.ADMIN,
+                organization="NATI",
+            )
+            session.add(user)
+            await session.flush()
+            await session.refresh(user)
+            await session.commit()
+            return {"ok": True, "id": user.id, "role": user.role}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "trace": traceback.format_exc()[-1000:]}
+
+
 @router.get("/orm-test")
 async def debug_orm_test():
     """SQLAlchemy ORM으로 직접 쿼리 실행"""
