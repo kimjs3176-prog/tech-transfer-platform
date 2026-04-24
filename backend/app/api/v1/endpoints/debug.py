@@ -53,3 +53,50 @@ async def debug_tables():
             return {"tables": tables, "count": len(tables)}
     except Exception as e:
         return {"error": str(e)}
+
+
+@router.get("/query-test")
+async def debug_query_test():
+    """applications/contracts 쿼리 직접 실행해서 오류 메시지 반환"""
+    results = {}
+    queries = {
+        "applications_raw": "SELECT id, application_no, status FROM applications LIMIT 1",
+        "contracts_raw": "SELECT id, contract_no, status FROM contracts LIMIT 1",
+        "users_raw": "SELECT id, email, role FROM users LIMIT 1",
+        "enum_types": (
+            "SELECT typname, enumlabel FROM pg_type "
+            "JOIN pg_enum ON pg_type.oid = pg_enum.enumtypid ORDER BY typname, enumsortorder"
+        ),
+    }
+    async with engine.connect() as conn:
+        for name, sql in queries.items():
+            try:
+                r = await conn.execute(text(sql))
+                rows = [dict(row._mapping) for row in r.fetchall()]
+                results[name] = {"ok": True, "rows": rows}
+            except Exception as e:
+                results[name] = {"ok": False, "error": str(e)}
+    return results
+
+
+@router.get("/orm-test")
+async def debug_orm_test():
+    """SQLAlchemy ORM으로 직접 쿼리 실행"""
+    import traceback
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy import select
+    from app.models.application import Application
+    from app.models.contract import Contract
+
+    AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    results = {}
+    async with AsyncSessionLocal() as session:
+        for name, Model in [("application", Application), ("contract", Contract)]:
+            try:
+                r = await session.execute(select(Model).limit(1))
+                rows = r.scalars().all()
+                results[name] = {"ok": True, "count": len(rows)}
+            except Exception as e:
+                results[name] = {"ok": False, "error": str(e), "trace": traceback.format_exc()[-800:]}
+    return results
