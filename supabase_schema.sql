@@ -48,9 +48,13 @@ CREATE TABLE IF NOT EXISTS applications (
     extra_data      JSONB,
     rejection_reason TEXT,
     manager_id      INTEGER REFERENCES users(id),
+    -- 발명자 배정 (KIPRIS 발명인 기준 회원 검색 후 배정)
+    assigned_inventor_id INTEGER REFERENCES users(id),
     created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP NOT NULL DEFAULT NOW()
 );
+-- 기존 테이블에 컬럼 추가 (이미 생성된 경우)
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS assigned_inventor_id INTEGER REFERENCES users(id);
 CREATE INDEX IF NOT EXISTS ix_applications_application_no ON applications(application_no);
 
 -- 5. 계약서
