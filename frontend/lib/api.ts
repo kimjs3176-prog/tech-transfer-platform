@@ -1,7 +1,5 @@
 import axios from "axios";
 
-// 개발: NEXT_PUBLIC_API_URL=http://localhost:8000
-// Vercel: /_/backend (experimentalServices 라우트 — 환경변수 불필요)
 const BASE = process.env.NEXT_PUBLIC_API_URL
   ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1`
   : "/_/backend/api/v1";
@@ -70,4 +68,19 @@ export const approvalApi = {
 // ---- 대시보드 ----
 export const dashboardApi = {
   stats: () => api.get("/dashboard/stats"),
+};
+
+// ---- 특허 검색 (KIPRIS) ----
+export const patentApi = {
+  search: (q: string, page = 1, perPage = 10) =>
+    api.get("/patents/search", { params: { q, page, per_page: perPage } }),
+  get: (patentNo: string) => api.get(`/patents/${encodeURIComponent(patentNo)}`),
+};
+
+// ---- 사용자 검색 (발명자 배정용) ----
+export const userApi = {
+  search: (name: string, role?: string) =>
+    api.get("/users/search", { params: { name, role } }),
+  searchInventors: (names: string) =>
+    api.get("/users/inventors", { params: { names } }),
 };

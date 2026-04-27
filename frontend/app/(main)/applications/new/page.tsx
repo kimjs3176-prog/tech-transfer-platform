@@ -1,13 +1,16 @@
 "use client";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { applicationApi } from "@/lib/api";
+import { addYears, addMonths, format } from "date-fns";
+import PatentSearchModal, { PatentResult } from "@/components/applications/PatentSearchModal";
+import InventorSearchPanel from "@/components/applications/InventorSearchPanel";
 
-/* ───────────── 워크플로 스텝 ───────────── */
+/* ───── 워크플로 스텝 ───── */
 const STEPS = [
   { org: "농진원", label: "신청서접수" },
   { org: "소속기관", label: "발명자배정" },
@@ -21,12 +24,19 @@ const STEPS = [
   { org: "소속기관", label: "실적보고" },
 ];
 
-/* ───────────── 유효성 스키마 ───────────── */
+/* ───── 연단위 자동 기간 옵션 ───── */
+const PERIOD_OPTIONS = [
+  { label: "1년", years: 1 },
+  { label: "2년", years: 2 },
+  { label: "3년", years: 3 },
+  { label: "5년", years: 5 },
+];
+
+/* ───── 스키마 ───── */
 const schema = z.object({
-  /* 관련특허정보 */
   ownership_type: z.string().default("국유_농진청"),
   ownership_status: z.enum(["출원", "등록"]).default("출원"),
-  case_domestic: z.boolean().default(true),
+  case_domestic: z.string().default("true"),
   rights_type: z.string().default("특허"),
   receipt_no: z.string().optional(),
   application_no: z.string().optional(),
@@ -37,8 +47,6 @@ const schema = z.object({
   inventor_phone: z.string().optional(),
   applicant_org: z.string().optional(),
   registration_manager: z.string().optional(),
-
-  /* 실시신청내용 */
   contract_type: z.enum(["신규", "재계약", "자동재계약"]).default("신규"),
   disposal_type: z.enum(["통상실시", "전용실시", "양도"]).default("통상실시"),
   fee_type: z.enum(["유상_선납경상", "유상_선납정액", "무상"]).default("유상_선납경상"),
@@ -46,8 +54,6 @@ const schema = z.object({
   period_end: z.string().optional(),
   region: z.string().default("대한민국 전역"),
   impl_content: z.string().default("특허법 제2조 제3호에 규정된 실시행위"),
-
-  /* 계약신청정보 */
   contact_name: z.string().optional(),
   contact_email: z.string().optional(),
   contact_phone: z.string().optional(),
@@ -56,8 +62,6 @@ const schema = z.object({
   address: z.string().optional(),
   contract_amount: z.string().default("0"),
   market_share: z.string().default("0.0"),
-
-  /* 신청업체정보 */
   company_name: z.string().min(1, "회사명을 입력하세요"),
   established_date: z.string().optional(),
   ownership_flag: z.string().optional(),
@@ -71,17 +75,17 @@ const schema = z.object({
   company_fax: z.string().optional(),
   homepage: z.string().optional(),
   products: z.string().optional(),
-
-  /* 기존 필수 필드 (백엔드) */
   technology_name: z.string().optional(),
   patent_no: z.string().optional(),
   transfer_type: z.string().default("통상실시"),
   purpose: z.string().default("기술이전 신청"),
+  assigned_inventor_id: z.number().optional(),
+  assigned_inventor_name: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
 
-/* ───────────── 컴포넌트 헬퍼 ───────────── */
+/* ───── 헬퍼 컴포넌트 ───── */
 function FieldRow({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="flex items-center min-h-[28px] border-b border-gray-200 last:border-0">
@@ -120,19 +124,22 @@ function Radio({ label, ...props }: React.InputHTMLAttributes<HTMLInputElement> 
   );
 }
 
-/* ───────────── 메인 페이지 ───────────── */
-export default function NewApplicationDetailPage() {
+/* ───── 메인 페이지 ───── */
+export default function NewApplicationPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("첨부파일");
-  const [attachments, setAttachments] = useState<{ name: string; date: string; uploader: string }[]>([]);
+  const [attachments, setAttachments] = useState<{ name: string; date: string }[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
+  const [showPatentModal, setShowPatentModal] = useState(false);
+  const [kiprisInventors, setKiprisInventors] = useState<string[]>([]);
+
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       ownership_type: "국유_농진청",
       ownership_status: "출원",
-      case_domestic: true,
+      case_domestic: "true",
       rights_type: "특허",
       contract_type: "신규",
       disposal_type: "통상실시",
@@ -158,29 +165,60 @@ export default function NewApplicationDetailPage() {
     onSuccess: () => router.push("/applications"),
   });
 
+  /* ── KIPRIS 특허 선택 시 폼 자동 입력 ── */
+  const handlePatentSelect = useCallback((p: PatentResult) => {
+    setValue("invention_title", p.title);
+    setValue("application_no", p.application_number ?? "");
+    setValue("registration_no", p.registration_number ?? "");
+    setValue("applicant_org", p.applicant);
+    setValue("inventor_name", p.inventors.join(", "));
+    setValue("patent_no", p.registration_number ?? p.application_number ?? "");
+    setValue("technology_name", p.title);
+    setValue("ownership_status", p.registration_number ? "등록" : "출원");
+    setKiprisInventors(p.inventors);
+  }, [setValue]);
+
+  /* ── 연단위 기간 자동 입력 ── */
+  const handlePeriodAuto = useCallback((years: number) => {
+    const today = new Date();
+    const start = format(today, "yyyy-MM-dd");
+    const end = format(addYears(today, years), "yyyy-MM-dd");
+    setValue("period_start", start);
+    setValue("period_end", end);
+  }, [setValue]);
+
+  /* ── period_start 변경 시 선택된 연도 기준 end 자동 업데이트 ── */
+  const periodStart = watch("period_start");
+
+  /* ── 발명자 배정 ── */
+  const handleInventorAssign = useCallback((user: { id: number; name: string }) => {
+    setValue("assigned_inventor_id", user.id);
+    setValue("assigned_inventor_name", user.name);
+    setValue("inventor_name", user.name);
+  }, [setValue]);
+
+  /* ── 파일 첨부 ── */
   const handleFileAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     setAttachments((prev) => [
       ...prev,
-      ...files.map((f) => ({
-        name: f.name,
-        date: new Date().toLocaleDateString("ko-KR"),
-        uploader: "관리자",
-      })),
+      ...files.map((f) => ({ name: f.name, date: new Date().toLocaleDateString("ko-KR") })),
     ]);
     if (fileRef.current) fileRef.current.value = "";
   };
 
+  const assignedInventorName = watch("assigned_inventor_name");
   const BOTTOM_TABS = ["제품별견적", "사업장", "사업규모", "회사연혁", "대표자정보", "계약관리", "첨부파일"];
 
   return (
     <div className="flex flex-col h-full bg-gray-100 text-xs">
-      {/* ── 타이틀 바 ── */}
+      {/* 타이틀 */}
       <div className="flex items-center gap-3 bg-white border-b px-4 py-2 shadow-sm">
         <span className="text-sm font-bold text-[var(--primary)]">기술이전 신청/접수관리</span>
         <span className="text-gray-300">|</span>
         <span className="text-gray-500 text-xs">기술이전신청서 신규</span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <button type="button" onClick={() => router.back()} className="border px-3 py-1 rounded text-xs text-gray-600 hover:bg-gray-50">취소</button>
           <button
             onClick={handleSubmit((d) => mutation.mutate(d))}
             disabled={mutation.isPending}
@@ -191,28 +229,41 @@ export default function NewApplicationDetailPage() {
         </div>
       </div>
 
-      {/* ── 워크플로 스텝 ── */}
+      {/* 워크플로 스텝 */}
       <div className="bg-white border-b px-2 overflow-x-auto">
         <div className="flex">
           {STEPS.map((s, i) => (
             <div key={i} className={`flex flex-col items-center px-3 py-1.5 border-r border-gray-100 min-w-[72px] ${i === 0 ? "bg-[var(--primary-light)]" : ""}`}>
-              <span className={`text-[10px] font-bold ${i === 0 ? "text-[var(--primary)]" : "text-gray-500"}`}>{s.org}</span>
-              <span className={`text-[10px] mt-0.5 ${i === 0 ? "text-[var(--primary)]" : "text-gray-500"}`}>{s.label}</span>
+              <span className={`text-[10px] font-bold ${i === 0 ? "text-[var(--primary)]" : "text-gray-400"}`}>{s.org}</span>
+              <span className={`text-[10px] mt-0.5 ${i === 0 ? "text-[var(--primary)]" : "text-gray-400"}`}>{s.label}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ── 메인 폼 영역 ── */}
+      {/* 메인 폼 */}
       <div className="flex-1 overflow-auto p-2">
         <div className="flex gap-2 min-w-[900px]">
 
-          {/* ─── 좌: 관련특허정보 + 실시신청내용 ─── */}
+          {/* 좌: 관련특허정보 + 실시신청내용 */}
           <div className="flex-[2] space-y-2">
 
             {/* 관련특허정보 */}
             <div className="bg-white border rounded shadow-sm">
-              <div className="bg-gray-100 border-b px-3 py-1 font-bold text-gray-700 text-xs">관련특허정보</div>
+              <div className="bg-gray-100 border-b px-3 py-1.5 flex items-center justify-between">
+                <span className="font-bold text-gray-700 text-xs">관련특허정보</span>
+                {/* KIPRIS 검색 버튼 */}
+                <button
+                  type="button"
+                  onClick={() => setShowPatentModal(true)}
+                  className="flex items-center gap-1 bg-blue-600 text-white px-2.5 py-1 rounded text-[10px] font-medium hover:bg-blue-700 transition-colors"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                  KIPRIS 특허 검색
+                </button>
+              </div>
 
               {/* 구분 */}
               <div className="border-b border-gray-200 px-2 py-1.5">
@@ -233,9 +284,9 @@ export default function NewApplicationDetailPage() {
                 </div>
               </div>
 
-              {/* 사건구분 행 */}
+              {/* 사건구분 */}
               <div className="flex items-center border-b border-gray-200 text-xs">
-                <div className="w-20 shrink-0 bg-gray-50 border-r px-2 py-1.5 font-medium text-gray-700">사건구분</div>
+                <div className="w-24 shrink-0 bg-gray-50 border-r px-2 py-1.5 font-medium text-gray-700">사건구분</div>
                 <div className="flex items-center gap-2 px-2 py-1 flex-wrap">
                   <Select {...register("case_domestic")} className="w-16">
                     <option value="true">국내</option>
@@ -262,19 +313,29 @@ export default function NewApplicationDetailPage() {
                 {errors.invention_title && <span className="text-red-500 ml-1">{errors.invention_title.message}</span>}
               </FieldRow>
 
-              <div className="flex items-center border-b border-gray-200">
-                <div className="w-20 shrink-0 bg-gray-50 border-r px-2 py-1.5 font-medium text-gray-700 self-stretch flex items-center">발명자</div>
-                <div className="flex-1 grid grid-cols-2 divide-x divide-gray-200">
-                  <div className="px-2 py-1"><Input {...register("inventor_name")} className="w-full" /></div>
-                  <div className="flex items-center px-2 py-1 gap-2">
-                    <span className="text-gray-500 shrink-0">전화번호</span>
-                    <Input {...register("inventor_phone")} className="flex-1" />
+              {/* 발명자 행 (발명자 배정 포함) */}
+              <div className="flex border-b border-gray-200">
+                <div className="w-24 shrink-0 bg-gray-50 border-r px-2 py-1.5 font-medium text-gray-700 self-stretch flex items-center">발명자</div>
+                <div className="flex-1 p-2 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Input {...register("inventor_name")} className="flex-1" placeholder="이름" />
+                    <Input {...register("inventor_phone")} className="w-32" placeholder="전화번호" />
+                    {assignedInventorName && (
+                      <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded">
+                        ✓ {assignedInventorName} 배정됨
+                      </span>
+                    )}
                   </div>
+                  {/* 발명자 배정 검색 패널 */}
+                  <InventorSearchPanel
+                    kiprisInventors={kiprisInventors}
+                    onAssign={handleInventorAssign}
+                  />
                 </div>
               </div>
 
               <div className="flex items-center">
-                <div className="w-20 shrink-0 bg-gray-50 border-r px-2 py-1.5 font-medium text-gray-700 self-stretch flex items-center">출원인</div>
+                <div className="w-24 shrink-0 bg-gray-50 border-r px-2 py-1.5 font-medium text-gray-700 self-stretch flex items-center">출원인</div>
                 <div className="flex-1 grid grid-cols-2 divide-x divide-gray-200">
                   <div className="px-2 py-1"><Input {...register("applicant_org")} className="w-full" /></div>
                   <div className="flex items-center px-2 py-1 gap-2">
@@ -303,18 +364,38 @@ export default function NewApplicationDetailPage() {
 
               <FieldRow label="유무상 여부">
                 <Radio label="유상" value="유상_선납경상" {...register("fee_type")} />
-                <span className="text-gray-500 mr-2">(</span>
+                <span className="text-gray-400 mr-1">(</span>
                 <Radio label="선납(경상)" value="유상_선납경상" {...register("fee_type")} />
                 <Radio label="선납(정액)" value="유상_선납정액" {...register("fee_type")} />
-                <span className="text-gray-500 mr-3">)</span>
+                <span className="text-gray-400 mr-3">)</span>
                 <Radio label="무상" value="무상" {...register("fee_type")} />
               </FieldRow>
 
+              {/* 실시 기간 – 연단위 자동 입력 */}
               <FieldRow label="실시 기간">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Input {...register("period_start")} type="date" className="w-32" />
-                  <span className="text-gray-500">~</span>
+                  <span className="text-gray-400">~</span>
                   <Input {...register("period_end")} type="date" className="w-32" />
+                  {/* 연단위 버튼 */}
+                  <div className="flex items-center gap-1 ml-1">
+                    <span className="text-gray-400 text-[10px]">자동:</span>
+                    {PERIOD_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() => handlePeriodAuto(opt.years)}
+                        className="bg-blue-50 border border-blue-200 text-blue-600 px-1.5 py-0.5 rounded text-[10px] hover:bg-blue-100 transition-colors font-medium"
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                    {periodStart && (
+                      <span className="text-[10px] text-gray-400 ml-1">
+                        (시작일 기준)
+                      </span>
+                    )}
+                  </div>
                 </div>
               </FieldRow>
 
@@ -328,96 +409,52 @@ export default function NewApplicationDetailPage() {
             </div>
           </div>
 
-          {/* ─── 중: 계약신청정보 ─── */}
+          {/* 중: 계약신청정보 */}
           <div className="w-52 space-y-2">
             <div className="bg-white border rounded shadow-sm">
               <div className="bg-gray-100 border-b px-3 py-1 font-bold text-gray-700 text-xs">계약신청정보</div>
-
-              <FieldRow label="신청자">
-                <Input {...register("contact_name")} className="w-full" />
-              </FieldRow>
-              <FieldRow label="이메일">
-                <Input {...register("contact_email")} type="email" className="w-full" />
-              </FieldRow>
-              <FieldRow label="연락처">
-                <Input {...register("contact_phone")} className="w-full" />
-              </FieldRow>
-              <FieldRow label="휴대폰">
-                <Input {...register("contact_mobile")} className="w-full" />
-              </FieldRow>
+              <FieldRow label="신청자"><Input {...register("contact_name")} className="w-full" /></FieldRow>
+              <FieldRow label="이메일"><Input {...register("contact_email")} type="email" className="w-full" /></FieldRow>
+              <FieldRow label="연락처"><Input {...register("contact_phone")} className="w-full" /></FieldRow>
+              <FieldRow label="휴대폰"><Input {...register("contact_mobile")} className="w-full" /></FieldRow>
               <FieldRow label="우편번호">
                 <div className="flex gap-1">
-                  <Input {...register("postal_code")} className="w-20" />
+                  <Input {...register("postal_code")} className="w-16" />
                   <button type="button" className="bg-gray-100 border rounded px-1.5 text-[10px] hover:bg-gray-200">우편검색</button>
                 </div>
               </FieldRow>
-              <FieldRow label="주소">
-                <Input {...register("address")} className="w-full" />
-              </FieldRow>
-              <FieldRow label="권적금액">
-                <Input {...register("contract_amount")} className="w-full" />
-              </FieldRow>
-              <FieldRow label="점유율">
-                <Input {...register("market_share")} className="w-full" />
-              </FieldRow>
+              <FieldRow label="주소"><Input {...register("address")} className="w-full" /></FieldRow>
+              <FieldRow label="권적금액"><Input {...register("contract_amount")} className="w-full" /></FieldRow>
+              <FieldRow label="점유율"><Input {...register("market_share")} className="w-full" /></FieldRow>
             </div>
           </div>
 
-          {/* ─── 우: 신청업체정보 ─── */}
+          {/* 우: 신청업체정보 */}
           <div className="w-56 space-y-2">
             <div className="bg-white border rounded shadow-sm">
               <div className="bg-gray-100 border-b px-3 py-1 font-bold text-gray-700 text-xs">신청업체정보</div>
-
               <FieldRow label="회사명" required>
-                <div className="flex gap-1">
-                  <Input {...register("company_name")} className="flex-1" />
-                  <button type="button" className="bg-gray-100 border rounded px-1 text-[10px] hover:bg-gray-200">🔍</button>
-                </div>
+                <Input {...register("company_name")} className="w-full" />
                 {errors.company_name && <span className="text-red-500">{errors.company_name.message}</span>}
               </FieldRow>
-              <FieldRow label="설립년월일">
-                <Input {...register("established_date")} type="date" className="w-full" />
-              </FieldRow>
-              <FieldRow label="소유여부">
-                <Input {...register("ownership_flag")} className="w-full" />
-              </FieldRow>
-              <FieldRow label="사업자등록번호">
-                <Input {...register("business_reg_no")} placeholder="000-00-00000" className="w-full" />
-              </FieldRow>
-              <FieldRow label="법인등록번호">
-                <Input {...register("corp_reg_no")} className="w-full" />
-              </FieldRow>
-              <FieldRow label="대표자">
-                <Input {...register("representative")} className="w-full" />
-              </FieldRow>
-              <FieldRow label="업태">
-                <Input {...register("biz_type")} className="w-full" />
-              </FieldRow>
-              <FieldRow label="업종">
-                <Input {...register("industry")} className="w-full" />
-              </FieldRow>
-              <FieldRow label="본사 주소">
-                <Input {...register("hq_address")} className="w-full" />
-              </FieldRow>
-              <FieldRow label="전화번호">
-                <Input {...register("company_phone")} className="w-full" />
-              </FieldRow>
-              <FieldRow label="FAX">
-                <Input {...register("company_fax")} className="w-full" />
-              </FieldRow>
-              <FieldRow label="홈페이지">
-                <Input {...register("homepage")} placeholder="https://" className="w-full" />
-              </FieldRow>
-              <FieldRow label="생산품목">
-                <Input {...register("products")} className="w-full" />
-              </FieldRow>
+              <FieldRow label="설립년월일"><Input {...register("established_date")} type="date" className="w-full" /></FieldRow>
+              <FieldRow label="소유여부"><Input {...register("ownership_flag")} className="w-full" /></FieldRow>
+              <FieldRow label="사업자등록번호"><Input {...register("business_reg_no")} placeholder="000-00-00000" className="w-full" /></FieldRow>
+              <FieldRow label="법인등록번호"><Input {...register("corp_reg_no")} className="w-full" /></FieldRow>
+              <FieldRow label="대표자"><Input {...register("representative")} className="w-full" /></FieldRow>
+              <FieldRow label="업태"><Input {...register("biz_type")} className="w-full" /></FieldRow>
+              <FieldRow label="업종"><Input {...register("industry")} className="w-full" /></FieldRow>
+              <FieldRow label="본사 주소"><Input {...register("hq_address")} className="w-full" /></FieldRow>
+              <FieldRow label="전화번호"><Input {...register("company_phone")} className="w-full" /></FieldRow>
+              <FieldRow label="FAX"><Input {...register("company_fax")} className="w-full" /></FieldRow>
+              <FieldRow label="홈페이지"><Input {...register("homepage")} placeholder="https://" className="w-full" /></FieldRow>
+              <FieldRow label="생산품목"><Input {...register("products")} className="w-full" /></FieldRow>
             </div>
           </div>
         </div>
 
-        {/* ── 하단 탭 영역 ── */}
+        {/* 하단 탭 */}
         <div className="mt-2 bg-white border rounded shadow-sm min-w-[900px]">
-          {/* 탭 헤더 */}
           <div className="flex border-b">
             {BOTTOM_TABS.map((tab) => (
               <button
@@ -425,33 +462,20 @@ export default function NewApplicationDetailPage() {
                 type="button"
                 onClick={() => setActiveTab(tab)}
                 className={`px-3 py-1.5 text-xs border-r transition-colors ${
-                  activeTab === tab
-                    ? "bg-[var(--primary)] text-white font-medium"
-                    : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                  activeTab === tab ? "bg-[var(--primary)] text-white font-medium" : "bg-gray-50 text-gray-600 hover:bg-gray-100"
                 }`}
               >
                 {tab}
               </button>
             ))}
             <div className="flex items-center gap-1 ml-2">
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="bg-blue-50 border border-blue-300 rounded px-2 py-0.5 text-xs text-blue-700 hover:bg-blue-100"
-              >
-                + 추가
-              </button>
-              <button type="button" className="bg-gray-50 border rounded px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100">
-                🔄 수정
-              </button>
-              <button type="button" className="bg-gray-50 border rounded px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100">
-                ✕ 삭제
-              </button>
+              <button type="button" onClick={() => fileRef.current?.click()} className="bg-blue-50 border border-blue-300 rounded px-2 py-0.5 text-xs text-blue-700 hover:bg-blue-100">+ 추가</button>
+              <button type="button" className="bg-gray-50 border rounded px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100">수정</button>
+              <button type="button" className="bg-gray-50 border rounded px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100">삭제</button>
             </div>
             <input ref={fileRef} type="file" multiple hidden onChange={handleFileAdd} />
           </div>
 
-          {/* 탭 콘텐츠 */}
           <div className="min-h-[120px]">
             {activeTab === "첨부파일" && (
               <table className="w-full text-xs">
@@ -460,58 +484,30 @@ export default function NewApplicationDetailPage() {
                     <th className="w-8 px-2 py-1.5 text-center border-r">V</th>
                     <th className="px-3 py-1.5 text-left border-r">파일명</th>
                     <th className="w-24 px-2 py-1.5 text-center border-r">등록일자</th>
-                    <th className="w-20 px-2 py-1.5 text-center border-r">성명</th>
-                    <th className="w-16 px-2 py-1.5 text-center">등록</th>
+                    <th className="w-16 px-2 py-1.5 text-center">작업</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {attachments.length === 0 && (
+                  {attachments.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="text-center py-6 text-gray-400">
-                        첨부파일이 없습니다. [+ 추가]를 클릭하여 파일을 첨부하세요.
-                      </td>
+                      <td colSpan={4} className="text-center py-6 text-gray-400">[+ 추가]를 클릭하여 파일을 첨부하세요.</td>
                     </tr>
-                  )}
-                  {attachments.map((a, i) => (
+                  ) : attachments.map((a, i) => (
                     <tr key={i} className="border-b hover:bg-gray-50">
-                      <td className="px-2 py-1 text-center border-r">
-                        <input type="checkbox" className="accent-[var(--primary)]" />
-                      </td>
+                      <td className="px-2 py-1 text-center border-r"><input type="checkbox" className="accent-[var(--primary)]" /></td>
                       <td className="px-3 py-1 border-r text-blue-600">{a.name}</td>
                       <td className="px-2 py-1 text-center border-r text-gray-500">{a.date}</td>
-                      <td className="px-2 py-1 text-center border-r text-gray-500">{a.uploader}</td>
                       <td className="px-2 py-1 text-center">
-                        <div className="flex flex-col gap-0.5">
-                          <button
-                            type="button"
-                            onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
-                            className="text-red-500 hover:underline text-[10px]"
-                          >삭제</button>
-                          <button type="button" className="text-blue-500 hover:underline text-[10px]">열기</button>
-                          <button type="button" className="text-green-600 hover:underline text-[10px]">다운</button>
-                        </div>
+                        <button type="button" onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))} className="text-red-500 hover:underline text-[10px]">삭제</button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
-
-            {activeTab === "제품별견적" && (
-              <div className="p-4 text-gray-400 text-center py-8">제품별 견적 정보를 입력하세요.</div>
-            )}
-            {activeTab === "사업장" && (
-              <div className="p-4 text-gray-400 text-center py-8">사업장 정보를 입력하세요.</div>
-            )}
-            {activeTab === "사업규모" && (
-              <div className="p-4 text-gray-400 text-center py-8">사업 규모 정보를 입력하세요.</div>
-            )}
-            {activeTab === "회사연혁" && (
-              <div className="p-4 text-gray-400 text-center py-8">회사 연혁을 입력하세요.</div>
-            )}
             {activeTab === "대표자정보" && (
-              <div className="p-4">
-                <div className="grid grid-cols-2 gap-4 max-w-lg">
+              <div className="p-3">
+                <div className="grid grid-cols-2 gap-3 max-w-sm">
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">대표자명</label>
                     <Input {...register("representative")} className="w-full" />
@@ -519,35 +515,24 @@ export default function NewApplicationDetailPage() {
                 </div>
               </div>
             )}
-            {activeTab === "계약관리" && (
-              <div className="p-4 text-gray-400 text-center py-8">계약 관리 정보를 입력하세요.</div>
+            {!["첨부파일", "대표자정보"].includes(activeTab) && (
+              <div className="p-4 text-gray-400 text-center py-8">{activeTab} 정보를 입력하세요.</div>
             )}
           </div>
         </div>
 
-        {/* 하단 버튼 */}
-        <div className="mt-3 flex justify-end gap-2 min-w-[900px]">
-          {mutation.isError && (
-            <span className="text-red-500 text-xs mr-auto self-center">
-              저장 중 오류가 발생했습니다. 다시 시도해주세요.
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="border px-5 py-1.5 rounded text-xs text-gray-600 hover:bg-gray-100"
-          >
-            취소
-          </button>
-          <button
-            onClick={handleSubmit((d) => mutation.mutate(d))}
-            disabled={mutation.isPending}
-            className="bg-[var(--primary)] text-white px-6 py-1.5 rounded text-xs font-medium hover:opacity-90 disabled:opacity-50"
-          >
-            {mutation.isPending ? "저장 중..." : "저장"}
-          </button>
-        </div>
+        {mutation.isError && (
+          <p className="mt-2 text-red-500 text-xs text-right">저장 중 오류가 발생했습니다.</p>
+        )}
       </div>
+
+      {/* KIPRIS 특허 검색 모달 */}
+      {showPatentModal && (
+        <PatentSearchModal
+          onSelect={handlePatentSelect}
+          onClose={() => setShowPatentModal(false)}
+        />
+      )}
     </div>
   );
 }

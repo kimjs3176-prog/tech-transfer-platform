@@ -9,12 +9,14 @@ class ApplicationCreate(BaseModel):
     transfer_type: str
     purpose: str
     extra_data: dict | None = None
+    assigned_inventor_id: int | None = None
 
 
 class ApplicationUpdate(BaseModel):
     status: ApplicationStatus | None = None
     rejection_reason: str | None = None
     manager_id: int | None = None
+    assigned_inventor_id: int | None = None
 
 
 class ApplicationResponse(BaseModel):
@@ -26,6 +28,7 @@ class ApplicationResponse(BaseModel):
     transfer_type: str
     purpose: str
     rejection_reason: str | None
+    assigned_inventor_id: int | None = None
     created_at: datetime
     updated_at: datetime
 
