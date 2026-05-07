@@ -37,6 +37,7 @@ class Application(Base):
 
     rejection_reason: Mapped[str | None] = mapped_column(Text)
     manager_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    assigned_inventor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
