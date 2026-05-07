@@ -55,6 +55,16 @@ async def debug_tables():
         return {"error": str(e)}
 
 
+@router.get("/init-tables")
+async def init_tables():
+    """신규 테이블(companies 등) 생성 — 최초 1회 실행"""
+    from app.core.database import Base
+    import app.models.company  # noqa: ensure model is registered
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all, checkfirst=True)
+    return {"ok": True, "message": "테이블 생성 완료"}
+
+
 @router.get("/query-test")
 async def debug_query_test():
     """applications/contracts 쿼리 직접 실행해서 오류 메시지 반환"""

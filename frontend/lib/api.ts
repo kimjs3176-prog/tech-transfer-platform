@@ -67,6 +67,25 @@ export const approvalApi = {
     api.get(`/approvals/contracts/${contractId}/workflow/history`),
 };
 
+// ---- 업체정보관리 ----
+export const companyApi = {
+  list: (params?: { keyword?: string }) => api.get("/companies/", { params }),
+  stats: () => api.get("/companies/stats"),
+  get: (id: number) => api.get(`/companies/${id}`),
+  create: (data: object) => api.post("/companies/", data),
+  update: (id: number, data: object) => api.patch(`/companies/${id}`, data),
+  delete: (id: number) => api.delete(`/companies/${id}`),
+};
+
+// ---- 사후관리 ----
+export const performanceApi = {
+  list: (params?: { contract_id?: number; year?: number }) =>
+    api.get("/performance-reports/", { params }),
+  stats: () => api.get("/performance-reports/stats"),
+  create: (data: object) => api.post("/performance-reports/", data),
+  get: (id: number) => api.get(`/performance-reports/${id}`),
+};
+
 // ---- 대시보드 ----
 export const dashboardApi = {
   stats: () => api.get("/dashboard/stats"),
